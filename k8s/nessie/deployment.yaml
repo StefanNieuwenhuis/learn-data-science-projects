@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nessie
+  namespace: catalog
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nessie
+  template:
+    metadata:
+      labels:
+        app: nessie
+    spec:
+      containers:
+      - name: nessie
+        image: ghcr.io/projectnessie/nessie:latest
+        ports:
+        - containerPort: 19120
+          name: api
+        - containerPort: 9000
+          name: management
+        env:
+        - name: QUARKUS_PROFILE
+          value: prod
+        - name: NESSIE_VERSION_STORE_TYPE
+          value: ROCKSDB
+        - name: JAVA_OPTS_APPEND
+          value: "-Dnessie.version.store.persist.rocks.database-path=/var/lib/nessie/data"
+        - name: QUARKUS_OTEL_ENABLED
+          value: "false"
+        - name: QUARKUS_OTEL_SDK_DISABLED
+          value: "true"
+        readinessProbe:
+          httpGet:
+            path: /q/health/ready
+            port: 9000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /q/health/live
+            port: 9000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        volumeMounts:
+        - name: rocksdb
+          mountPath: /var/lib/nessie
+      volumes:
+      - name: rocksdb
+        persistentVolumeClaim:
+          claimName: nessie-rocksdb-pvc

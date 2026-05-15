@@ -16,12 +16,13 @@ MinIO is the object storage layer of the lakehouse, providing S3-compatible stor
 
 ## Components
 
-| File | Description |
-| --- | --- |
-| `secret.yaml` | Sealed secret containing MinIO root credentials |
-| `deployment.yaml` | MinIO single-node deployment with PVC |
-| `minio-init-job.yaml` | One-off job to create buckets on first install |
-| `port-forward.sh` | Script to forward MinIO ports to localhost |
+| File                  | Description                                     |
+|-----------------------|-------------------------------------------------|
+| `namespace.yaml`      | Namespace configuration                         |
+| `secret.yaml`         | Sealed secret containing MinIO root credentials |
+| `deployment.yaml`     | MinIO single-node deployment with PVC           |
+| `minio-init-job.yaml` | One-off job to create buckets on first install  |
+| `port-forward.sh`     | Script to forward MinIO ports to localhost      |
 
 ## Installation
 
@@ -41,6 +42,7 @@ kubeseal --namespace storage --format yaml > secret.yaml
 Apply in order:
 
 ```bash
+kubectl apply -f namespace.yaml
 kubectl apply -f secret.yaml
 kubectl apply -f deployment.yaml
 kubectl rollout status deployment/minio -n storage
