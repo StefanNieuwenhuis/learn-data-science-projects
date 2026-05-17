@@ -1,0 +1,138 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: dremio-master-coordinator
+  namespace: query
+spec:
+  serviceName: dremio-master-coordinator
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dremio-master-coordinator
+  template:
+    metadata:
+      labels:
+        app: dremio-master-coordinator
+    spec:
+      initContainers:
+      - name: generate-core-site
+        image: busybox
+        env:
+        - name: S3_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: dremio-credentials
+              key: access-key
+        - name: S3_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: dremio-credentials
+              key: secret-key
+        command:
+        - sh
+        - -c
+        - |
+          cat > /config/core-site.xml << EOF
+          <?xml version="1.0"?>
+          <configuration>
+            <property>
+              <name>fs.dremioS3.impl</name>
+              <value>com.dremio.plugins.s3.store.S3FileSystem</value>
+            </property>
+            <property>
+              <name>fs.s3a.aws.credentials.provider</name>
+              <value>org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider</value>
+            </property>
+            <property>
+              <name>fs.s3a.access.key</name>
+              <value>${S3_ACCESS_KEY}</value>
+            </property>
+            <property>
+              <name>fs.s3a.secret.key</name>
+              <value>${S3_SECRET_KEY}</value>
+            </property>
+            <property>
+              <name>fs.s3a.endpoint</name>
+              <value>minio.storage.svc.cluster.local:9000</value>
+            </property>
+            <property>
+              <name>fs.s3a.path.style.access</name>
+              <value>true</value>
+            </property>
+            <property>
+              <name>dremio.s3.compat</name>
+              <value>true</value>
+            </property>
+            <property>
+              <name>fs.s3a.connection.ssl.enabled</name>
+              <value>false</value>
+            </property>
+            <property>
+              <name>fs.s3a.endpoint.region</name>
+              <value>us-east-1</value>
+            </property>
+          </configuration>
+          EOF
+        volumeMounts:
+        - name: generated-config
+          mountPath: /config
+      containers:
+      - name: dremio-master-coordinator
+        image: dremio/dremio-oss:26.0.5
+        ports:
+        - containerPort: 9047
+          name: web
+        - containerPort: 31010
+          name: client
+        - containerPort: 32010
+          name: flight
+        - containerPort: 45678
+          name: fabric
+        env:
+        - name: DREMIO_MAX_HEAP_MEMORY_SIZE_MB
+          value: "2048"
+        - name: DREMIO_MAX_DIRECT_MEMORY_SIZE_MB
+          value: "2048"
+        resources:
+          requests:
+            cpu: "2"
+            memory: 4Gi
+          limits:
+            memory: 5Gi
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 9047
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          failureThreshold: 30
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 9047
+          initialDelaySeconds: 120
+          periodSeconds: 20
+          failureThreshold: 5
+        volumeMounts:
+        - name: dremio-storage
+          mountPath: /opt/dremio/data
+        - name: dremio-config
+          mountPath: /opt/dremio/conf/dremio.conf
+          subPath: dremio.conf
+        - name: generated-config
+          mountPath: /opt/dremio/conf/core-site.xml
+          subPath: core-site.xml
+      volumes:
+      - name: dremio-config
+        configMap:
+          name: dremio-conf-config
+      - name: generated-config
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: dremio-storage
+    spec:
+      accessModes: [ReadWriteOnce]
+      resources:
+        requests:
+          storage: 10Gi
