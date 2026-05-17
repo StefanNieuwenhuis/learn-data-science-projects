@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-connect-server
+  namespace: spark
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark-connect
+  template:
+    metadata:
+      labels:
+        app: spark-connect
+    spec:
+      serviceAccountName: spark
+      initContainers:
+      - name: generate-spark-defaults
+        image: busybox
+        env:
+        - name: S3_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: spark-credentials
+              key: access-key
+        - name: S3_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: spark-credentials
+              key: secret-key
+        command:
+        - sh
+        - -c
+        - |
+          cat > /config/spark-defaults.conf << EOF
+          # Iceberg + Nessie
+          spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+          spark.sql.catalog.nessie=org.apache.iceberg.spark.SparkCatalog
+          spark.sql.catalog.nessie.catalog-impl=org.apache.iceberg.nessie.NessieCatalog
+          spark.sql.catalog.nessie.uri=http://nessie.catalog.svc.cluster.local:19120/api/v2
+          spark.sql.catalog.nessie.ref=main
+          spark.sql.catalog.nessie.warehouse=s3a://warehouse/
+          spark.sql.catalog.nessie.io-impl=org.apache.iceberg.aws.s3.S3FileIO
+
+          # Iceberg S3 settings
+          spark.sql.catalog.nessie.s3.endpoint=http://minio.storage.svc.cluster.local:9000
+          spark.sql.catalog.nessie.s3.path-style-access=true
+          spark.sql.catalog.nessie.s3.region=eu-west-2
+          spark.sql.catalog.nessie.s3.access-key-id=${S3_ACCESS_KEY}
+          spark.sql.catalog.nessie.s3.secret-access-key=${S3_SECRET_KEY}
+
+          # Hadoop S3A settings
+          spark.hadoop.fs.s3a.endpoint=http://minio.storage.svc.cluster.local:9000
+          spark.hadoop.fs.s3a.access.key=${S3_ACCESS_KEY}
+          spark.hadoop.fs.s3a.secret.key=${S3_SECRET_KEY}
+          spark.hadoop.fs.s3a.path.style.access=true
+          spark.hadoop.fs.s3a.connection.ssl.enabled=false
+          spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
+          spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
+          spark.hadoop.fs.s3a.endpoint.region=eu-west-2
+          EOF
+        volumeMounts:
+        - name: generated-config
+          mountPath: /config
+      containers:
+      - name: spark-connect
+        image: spark-connect-server:4.1.1
+        imagePullPolicy: Never
+        command:
+        - /opt/spark/bin/spark-submit
+        args:
+        - "--class"
+        - "org.apache.spark.sql.connect.service.SparkConnectServer"
+        - "--name"
+        - "Spark Connect server"
+        ports:
+        - containerPort: 15002
+          name: grpc
+        - containerPort: 4040
+          name: ui
+        resources:
+          requests:
+            cpu: "1"
+            memory: 2Gi
+          limits:
+            memory: 4Gi
+        readinessProbe:
+          tcpSocket:
+            port: 15002
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        volumeMounts:
+        - name: generated-config
+          mountPath: /opt/spark/conf/spark-defaults.conf
+          subPath: spark-defaults.conf
+      volumes:
+      - name: generated-config
+        emptyDir: {}

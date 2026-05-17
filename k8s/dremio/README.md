@@ -23,12 +23,12 @@ Dremio is the query engine of the lakehouse, providing a SQL interface over Iceb
 Credentials are managed via Sealed Secrets. To create a sealed secret:
 
 ```bash
-kubectl create secret generic dremio-minio-credentials \
+kubectl create secret generic dremio-credentials \
   --namespace query \
   --from-literal=access-key=<<your-minio-access-key>> \
   --from-literal=secret-key=<<your-minio-secret-key>> \
   --dry-run=client -o yaml | \
-kubeseal --namespace dremio --format yaml > secret.yaml
+kubeseal --namespace query --format yaml > dremio-credentials.sealed.secret.yaml
 ```
 
 Apply in order:
