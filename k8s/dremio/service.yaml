@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dremio
+  namespace: query
+spec:
+  selector:
+    app: dremio-master-coordinator
+  ports:
+    - protocol: TCP
+      port: 9047
+      targetPort: 9047
+      name: console
+    - port: 31010
+      targetPort: 31010
+      protocol: TCP
+      name: flight
+    - port: 32010
+      targetPort: 32010
+      protocol: TCP
+      name: odbcclient
+    - port: 45678
+      targetPort: 45678
+      protocol: TCP
+      name: internaluse
+  type: ClusterIP

@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dremio-conf-config
+  namespace: query
+data:
+  dremio.conf: |
+    paths: {
+      local: "/opt/dremio/data"
+      dist: "dremioS3:///warehouse"
+    }
+
+    services: {
+      coordinator.enabled: true,
+      coordinator.master.enabled: true,
+      executor.enabled: true,
+      flight.use_session_service: true
+    }
