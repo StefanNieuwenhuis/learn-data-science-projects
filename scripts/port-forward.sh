@@ -1,11 +1,13 @@
 #!/bin/bash
 
-# Port-forward MinIO and Nessie in parallel
+# Port-forward all lakehouse services in parallel
 echo "Starting port-forwards..."
 echo "  MinIO API:      http://localhost:9000"
 echo "  MinIO Console:  http://localhost:9001"
 echo "  Nessie API:     http://localhost:19120"
-echo "  Dremio Console: http://localhost:9047"
+echo "  Dremio UI:      http://localhost:9047"
+echo "  Spark Connect:  http://localhost:15002"
+echo "  Spark UI:       http://localhost:4040"
 echo ""
 echo "Press Ctrl+C to stop all."
 
@@ -15,9 +17,12 @@ MINIO_PID=$!
 kubectl port-forward svc/nessie 19120:19120 -n catalog &
 NESSIE_PID=$!
 
-kubectl port-forward svc/dremio 9047:9047 -n query &
+kubectl port-forward svc/dremio-client 9047:9047 -n query &
 DREMIO_PID=$!
 
-trap "kill $MINIO_PID $NESSIE_PID $DREMIO_PID 2>/dev/null; exit" INT TERM
+kubectl port-forward svc/spark-connect 15002:15002 4040:4040 -n processing &
+SPARK_PID=$!
+
+trap "kill $MINIO_PID $NESSIE_PID $DREMIO_PID $SPARK_PID 2>/dev/null; exit" INT TERM
 
 wait
